@@ -5,236 +5,213 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <title>Lock-In Auditor Pro</title>
+    <title>Lock-In Auditor</title>
     <style>
         :root {
             --bg: #020617; --card: #1e293b; --accent: #22c55e;
-            --blue: #3b82f6; --error: #ef4444; --text: #f8fafc;
+            --text: #f8fafc; --muted: #64748b; --border: #334155;
         }
         body {
             margin: 0; font-family: -apple-system, system-ui, sans-serif;
-            background: var(--bg); color: var(--text); height: 100vh; overflow: hidden;
+            background: var(--bg); color: var(--text); padding: 20px;
+            line-height: 1.5;
         }
+        .container { max-width: 450px; margin: 0 auto; }
         
-        /* Onboarding Overlay */
-        #onboardingOverlay {
+        /* Modal Overlay */
+        #onboarding {
             position: fixed; inset: 0; background: var(--bg); z-index: 100;
             display: flex; align-items: center; justify-content: center; padding: 20px;
         }
         .modal {
-            background: var(--card); border-radius: 24px; padding: 30px;
-            width: 100%; max-width: 400px; border: 1px solid #334155;
-            box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+            background: var(--card); border-radius: 20px; padding: 24px;
+            width: 100%; border: 1px solid var(--border);
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            max-height: 90vh; overflow-y: auto;
         }
         
-        /* Steps */
-        .step-container { display: none; }
-        .step-container.active { display: block; animation: fadeIn 0.3s ease; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-
-        .indicator { display: flex; gap: 8px; margin-bottom: 20px; }
-        .dot { height: 4px; flex: 1; background: #334155; border-radius: 2px; }
-        .dot.active { background: var(--accent); }
-
-        h2 { margin: 0 0 10px 0; font-size: 24px; }
-        p { color: #94a3b8; font-size: 15px; margin-bottom: 25px; line-height: 1.4; }
-
-        /* Main Dashboard */
-        .dashboard { padding: 20px; height: 100vh; overflow-y: auto; box-sizing: border-box; }
-        .os-badge {
-            display: inline-block; padding: 4px 12px; border-radius: 20px;
-            font-size: 11px; font-weight: bold; margin-bottom: 10px;
+        h2 { margin: 0 0 15px 0; color: var(--accent); font-size: 22px; text-align: center; }
+        
+        .guide-section {
+            background: rgba(0,0,0,0.3); padding: 15px; border-radius: 12px;
+            border-left: 4px solid var(--accent); margin-bottom: 15px; font-size: 14px;
         }
-        .os-ios { background: #fff; color: #000; }
-        .os-android { background: #3ddc84; color: #000; }
+        .guide-title { font-weight: 800; display: block; margin-bottom: 5px; color: var(--accent); font-size: 12px; text-transform: uppercase; }
 
+        /* Dashboard Components */
         .sensor-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px; }
         .sensor-box {
             background: #000; border-radius: 12px; padding: 15px;
-            border: 1px solid #334155; text-align: center;
+            border: 1px solid var(--border); text-align: center;
         }
-        .sensor-label { font-size: 10px; color: #94a3b8; text-transform: uppercase; margin-bottom: 5px; }
+        .sensor-label { font-size: 10px; color: var(--muted); text-transform: uppercase; margin-bottom: 5px; }
         .sensor-val { font-family: monospace; font-size: 20px; color: var(--accent); }
 
         button {
-            width: 100%; padding: 18px; border-radius: 14px; border: none;
-            font-weight: 800; font-size: 16px; cursor: pointer; transition: 0.2s;
-            margin-bottom: 10px;
+            width: 100%; padding: 16px; border-radius: 12px; border: none;
+            font-weight: 700; font-size: 15px; cursor: pointer; transition: 0.2s;
+            margin-bottom: 10px; background: var(--accent); color: #000;
         }
-        .btn-primary { background: var(--accent); color: #000; }
-        .btn-blue { background: var(--blue); color: #fff; }
-        .btn-outline { background: transparent; border: 1px solid #334155; color: #94a3b8; }
-        button:disabled { opacity: 0.5; cursor: not-allowed; }
+        button:active { opacity: 0.8; transform: scale(0.98); }
+        .btn-outline { background: transparent; border: 1px solid var(--border); color: var(--text); }
 
         .log {
             background: #000; padding: 12px; border-radius: 12px;
-            font-size: 11px; color: #4ade80; font-family: monospace;
-            height: 120px; overflow-y: auto; border: 1px solid #334155;
+            font-size: 11px; color: var(--accent); font-family: monospace;
+            height: 120px; overflow-y: auto; border: 1px solid var(--border);
         }
-        #preview { width: 100%; border-radius: 12px; margin-top: 15px; display: none; }
+        #preview { width: 100%; border-radius: 12px; margin-top: 15px; display: none; border: 1px solid var(--border); }
     </style>
 </head>
 <body>
 
-<!-- ONBOARDING POPUP -->
-<div id="onboardingOverlay">
+<div id="onboarding">
     <div class="modal">
-        <div class="indicator">
-            <div id="dot1" class="dot active"></div>
-            <div id="dot2" class="dot"></div>
+        <h2>App Setup</h2>
+        
+        <div class="guide-section">
+            <span class="guide-title">For iOS Users</span>
+            Tap <strong>Share</strong> icon → scroll down and tap <strong>'Edit Actions...'</strong> or <strong>'More'</strong> if needed → select <strong>'Add to Home Screen'</strong>.
         </div>
 
-        <!-- Step 1: Install -->
-        <div id="step1" class="step-container active">
-            <h2>Step 1: Install</h2>
-            <p id="installMsg">To access hardware sensors, this tool must be installed to your home screen.</p>
-            <div id="pwaAlert" style="color:var(--error); font-size:12px; margin-bottom:15px; display:none;">
-                ⚠️ Detection: Not installed yet.
-            </div>
-            <button class="btn-primary" id="continue1">I have installed it</button>
+        <div class="guide-section">
+            <span class="guide-title">For Android Users</span>
+            Tap the <strong>three dots (⋮)</strong> in Chrome → select <strong>'Install App'</strong> or <strong>'Add to Home Screen'</strong>.
         </div>
 
-        <!-- Step 2: Permissions -->
-        <div id="step2" class="step-container">
-            <h2>Step 2: Sensors</h2>
-            <p>Allow access to Motion, Orientation, and Notifications for full auditing capability.</p>
-            <button class="btn-primary" id="activateBtn">Authorize & Start</button>
-        </div>
+        <p style="font-size: 12px; color: var(--muted); margin-bottom: 20px; text-align: center;">
+            Installing as an app is required to unlock hardware vibration and background auditing.
+        </p>
+        
+        <button id="activateBtn">Authorize & Start Auditor</button>
     </div>
 </div>
 
-<!-- MAIN DASHBOARD -->
-<div class="dashboard">
-    <div id="osTag"></div>
-    <h1 style="margin:0 0 5px 0; font-size: 22px;">Auditor Dashboard</h1>
-    <p style="color:#64748b; font-size:13px; margin-bottom:20px;">Testing live hardware environment.</p>
+<div class="container">
+    <h1 style="font-size: 24px; margin: 0 0 5px 0;">Hardware Auditor</h1>
+    <p style="color: var(--muted); font-size: 13px; margin-bottom: 20px;">Live Hardware Verification</p>
 
     <div class="sensor-grid">
         <div class="sensor-box">
-            <div class="sensor-label">Tilt (Gyro)</div>
-            <div id="valGyro" class="sensor-val">0°</div>
+            <div class="sensor-label">Gyro (Tilt)</div>
+            <div id="valGyro" class="sensor-val">--</div>
         </div>
         <div class="sensor-box">
-            <div class="sensor-label">Force (Accel)</div>
-            <div id="valAccel" class="sensor-val">1.0G</div>
+            <div class="sensor-label">Accel (Force)</div>
+            <div id="valAccel" class="sensor-val">--</div>
         </div>
     </div>
 
-    <div style="margin-bottom: 20px;">
-        <button class="btn-blue" onclick="testVibrate()">Standard Vibrate</button>
-        <button class="btn-blue" style="background:#7c3aed" onclick="testNotif()">Notification Pulse</button>
-        <button class="btn-outline" onclick="document.getElementById('camIn').click()">Proof of Work Cam</button>
-        <input type="file" id="camIn" accept="image/*" capture="environment" style="display:none" onchange="handleFile(this)">
+    <button onclick="testVibrate()">Test Vibrate Pulse</button>
+    <button onclick="testNotif()">Test Notification Pulse</button>
+    
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+        <button class="btn-outline" onclick="document.getElementById('camIn').click()">Open Camera</button>
+        <button class="btn-outline" onclick="document.getElementById('fileIn').click()">Upload File</button>
     </div>
 
-    <div class="log" id="sysLog">SYSTEM INITIALIZED...</div>
+    <input type="file" id="camIn" accept="image/*" capture="environment" style="display:none" onchange="handleFile(this)">
+    <input type="file" id="fileIn" accept="image/*" style="display:none" onchange="handleFile(this)">
+
+    <div class="log" id="sysLog">Ready for initialization...</div>
     <img id="preview">
 </div>
 
 <script>
-    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
-    const isPWA = window.navigator.standalone || window.matchMedia('(display-mode: standalone)').matches;
-    
-    const overlay = document.getElementById('onboardingOverlay');
-    const dot1 = document.getElementById('dot1');
-    const dot2 = document.getElementById('dot2');
-    const step1 = document.getElementById('step1');
-    const step2 = document.getElementById('step2');
     const sysLog = document.getElementById('sysLog');
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
 
     function log(msg) {
         const t = new Date().toLocaleTimeString([], {hour12:false});
         sysLog.innerHTML = `<div>[${t}] ${msg}</div>` + sysLog.innerHTML;
     }
 
-    // OS Tagging
-    const osTag = document.getElementById('osTag');
-    osTag.innerHTML = isIOS ? `<span class="os-badge os-ios">iOS DEVICE</span>` : `<span class="os-badge os-android">ANDROID DEVICE</span>`;
-
-    // Step 1 Logic
-    document.getElementById('installMsg').innerText = isIOS 
-        ? "Tap Share -> 'Add to Home Screen' to unlock hardware access."
-        : "Tap the Menu (⋮) -> 'Install App' to unlock hardware access.";
-
-    if (!isPWA) document.getElementById('pwaAlert').style.display = 'block';
-
-    document.getElementById('continue1').onclick = () => {
-        step1.classList.remove('active');
-        step2.classList.add('active');
-        dot1.classList.remove('active');
-        dot1.style.background = "var(--accent)";
-        dot2.classList.add('active');
-    };
-
-    // Step 2 Logic
     document.getElementById('activateBtn').onclick = async function() {
-        log("Authorizing...");
+        log("Requesting permissions...");
         
-        // Notifications
-        try {
-            const nPerm = await Notification.requestPermission();
-            log("Notifications: " + nPerm);
-        } catch(e) { log("Notif Error: " + e.message); }
-
-        // Sensors
-        if (isIOS && typeof DeviceOrientationEvent.requestPermission === 'function') {
+        // Notification Request
+        if ("Notification" in window) {
             try {
-                const oPerm = await DeviceOrientationEvent.requestPermission();
-                if (oPerm === 'granted') startSensors();
-                else log("Orientation Denied");
-            } catch(e) { log("Sensor Error: " + e.message); }
-        } else {
-            startSensors();
+                await Notification.requestPermission();
+                log("Notifications checked.");
+            } catch (e) { log("Notif Error."); }
         }
 
-        overlay.style.display = 'none';
-        document.body.style.overflow = 'auto';
+        // iOS Permission specifically
+        if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+            try {
+                const permission = await DeviceOrientationEvent.requestPermission();
+                if (permission === 'granted') {
+                    initHardwareListeners();
+                } else {
+                    log("iOS Sensor Permission Denied.");
+                }
+            } catch (e) { log("iOS Sensor Error."); }
+        } else {
+            // Android / Standard PC / Others
+            initHardwareListeners();
+        }
+
+        document.getElementById('onboarding').style.display = 'none';
     };
 
-    function startSensors() {
-        // Gyro
-        window.addEventListener('deviceorientation', (e) => {
-            if (e.beta !== null) document.getElementById('valGyro').innerText = Math.round(e.beta) + "°";
-        });
+    function initHardwareListeners() {
+        log("Engaging sensor suite...");
 
-        // Accel
-        window.addEventListener('devicemotion', (e) => {
-            if (e.accelerationIncludingGravity) {
-                const a = e.accelerationIncludingGravity;
-                const force = Math.sqrt(a.x**2 + a.y**2 + a.z**2) / 9.8;
-                document.getElementById('valAccel').innerText = force.toFixed(1) + "G";
-                if (force > 1.8) log("Motion Triggered!");
-            }
-        });
-        log("Sensor suite active.");
+        // Device Orientation (Tilt)
+        if (window.DeviceOrientationEvent) {
+            window.addEventListener('deviceorientation', (e) => {
+                if (e.beta !== null) {
+                    document.getElementById('valGyro').innerText = Math.round(e.beta) + "°";
+                }
+            }, true);
+        } else {
+            log("Orientation not supported.");
+        }
+
+        // Device Motion (Movement/Impact)
+        if (window.DeviceMotionEvent) {
+            window.addEventListener('devicemotion', (e) => {
+                const acc = e.accelerationIncludingGravity || e.acceleration;
+                if (acc && acc.x !== null) {
+                    const total = Math.sqrt(acc.x**2 + acc.y**2 + acc.z**2) / 9.80665;
+                    document.getElementById('valAccel').innerText = total.toFixed(1) + "G";
+                    if (total > 2.2) log("Impact Spike Detected");
+                }
+            }, true);
+        } else {
+            log("Motion not supported.");
+        }
+
+        log("Listeners engaged successfully.");
     }
 
-    // Test Functions
     function testVibrate() {
         if (navigator.vibrate) {
             navigator.vibrate([200, 100, 200]);
-            log("Vibrate Sent");
+            log("Vibration sent.");
         } else {
-            log("API Unsupported");
+            log("Vibration API unsupported on this browser.");
         }
     }
 
     function testNotif() {
         if (Notification.permission === "granted") {
-            new Notification("Lock-In Audit", { body: "Pulse test successful!", silent: false });
-            log("Notification Sent");
+            new Notification("Lock-In Pulse", { body: "Audit signal active.", silent: false });
+            log("Notification triggered.");
         } else {
-            log("Notif permission missing");
+            log("Please enable notifications.");
         }
     }
 
     function handleFile(input) {
-        if (input.files[0]) {
+        if (input.files && input.files[0]) {
             const reader = new FileReader();
             reader.onload = (e) => {
-                document.getElementById('preview').src = e.target.result;
-                document.getElementById('preview').style.display = 'block';
-                log("Proof image loaded.");
+                const img = document.getElementById('preview');
+                img.src = e.target.result;
+                img.style.display = 'block';
+                log("Proof file rendered.");
             };
             reader.readAsDataURL(input.files[0]);
         }
