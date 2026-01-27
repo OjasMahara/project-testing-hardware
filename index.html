@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>Lock-In Hardware Lab</title>
+    <style>
+        body {
+            font-family: -apple-system, system-ui, sans-serif;
+            background: #020617; color: #f8fafc;
+            padding: 20px; margin: 0; line-height: 1.5;
+        }
+        .card {
+            background: #1e293b; border-radius: 16px; padding: 20px;
+            border: 1px solid #334155; margin-bottom: 20px;
+        }
+        h2 { margin: 0 0 12px 0; font-size: 18px; color: #22c55e; display: flex; align-items: center; gap: 8px; }
+        .data-box {
+            background: #000; color: #4ade80; font-family: monospace;
+            padding: 12px; border-radius: 8px; font-size: 13px; margin-bottom: 12px;
+            min-height: 40px; overflow-wrap: break-word;
+        }
+        button {
+            width: 100%; padding: 14px; border-radius: 10px; border: none;
+            background: #22c55e; color: #000; font-weight: 800; cursor: pointer;
+            font-size: 15px; transition: transform 0.1s;
+        }
+        button:active { transform: scale(0.96); }
+        .secondary-btn { background: #3b82f6; color: white; margin-top: 10px; }
+        .upload-area {
+            border: 2px dashed #334155; border-radius: 12px; padding: 20px;
+            text-align: center; color: #94a3b8; cursor: pointer;
+        }
+        #preview { width: 100%; border-radius: 12px; margin-top: 15px; display: none; border: 2px solid #22c55e; }
+        .log { font-size: 11px; color: #64748b; max-height: 80px; overflow-y: auto; margin-top: 10px; }
+        .flash { position: fixed; inset: 0; background: white; opacity: 0; pointer-events: none; z-index: 9999; }
+    </style>
+</head>
+<body>
+
+    <div id="flash" class="flash" style="transition: opacity 0.1s;"></div>
+
+    <h1 style="font-size: 24px; margin-bottom: 5px;">Lock-In Lab</h1>
+    <p style="color: #94a3b8; font-size: 13px; margin-bottom: 25px;">Testing real-world hardware integration via GitHub/HTTPS.</p>
+
+    <!-- 1. GYROSCOPE -->
+    <div class="card">
+        <h2>🔄 Gyroscope (Pick-up Detection)</h2>
+        <div class="data-box" id="gyroData">Status: Click button to request access</div>
+        <button onclick="initGyro()">Grant Motion Access</button>
+        <div class="log" id="gyroLog"></div>
+    </div>
+
+    <!-- 2. HAPTIC PULSE -->
+    <div class="card">
+        <h2>📳 Haptic Pulse (Vibration)</h2>
+        <div class="data-box">Test visual flash and physical vibration.</div>
+        <button style="background: #a855f7; color: white;" onclick="triggerPulse()">Trigger Pulse</button>
+    </div>
+
+    <!-- 3. CAMERA PROOF -->
+    <div class="card">
+        <h2>📸 Proof of Work (Camera)</h2>
+        <div class="data-box">Native camera app capture (Bypass method).</div>
+        <button class="secondary-btn" onclick="document.getElementById('camIn').click()">Open Camera App</button>
+        <input type="file" id="camIn" accept="image/*" capture="environment" style="display:none" onchange="previewFile(this)">
+    </div>
+
+    <!-- 4. FILE/SCREENSHOT UPLOAD -->
+    <div class="card">
+        <h2>📁 File / Screenshot Upload</h2>
+        <div class="data-box">Choose from gallery or upload a screenshot.</div>
+        <div class="upload-area" onclick="document.getElementById('fileIn').click()">
+            Tap to Browse Files
+        </div>
+        <input type="file" id="fileIn" accept="image/*" style="display:none" onchange="previewFile(this)">
+        <img id="preview">
+    </div>
+
+    <script>
+        const gyroData = document.getElementById('gyroData');
+        const gyroLog = document.getElementById('gyroLog');
+        const flash = document.getElementById('flash');
+        const preview = document.getElementById('preview');
+
+        // --- Gyroscope Logic ---
+        async function initGyro() {
+            if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+                try {
+                    const permission = await DeviceOrientationEvent.requestPermission();
+                    if (permission === 'granted') {
+                        startListening();
+                    } else {
+                        gyroData.innerText = "Permission Denied";
+                    }
+                } catch (err) {
+                    gyroData.innerText = "Error: " + err.message;
+                }
+            } else {
+                startListening();
+            }
+        }
+
+        function startListening() {
+            window.addEventListener('deviceorientation', (e) => {
+                if (e.beta !== null) {
+                    gyroData.innerText = `Tilt (Beta): ${Math.round(e.beta)}°\nRoll (Gamma): ${Math.round(e.gamma)}°`;
+                    
+                    // Simple pick-up threshold
+                    if (Math.abs(e.beta) > 25 || Math.abs(e.gamma) > 20) {
+                        logEvent("Movement Detected");
+                    }
+                }
+            });
+        }
+
+        function logEvent(msg) {
+            const time = new Date().toLocaleTimeString();
+            gyroLog.innerHTML = `<div>[${time}] ${msg}</div>` + gyroLog.innerHTML;
+        }
+
+        // --- Pulse Logic ---
+        function triggerPulse() {
+            // Vibrate
+            if (navigator.vibrate) {
+                navigator.vibrate(200);
+            }
+            // Flash
+            flash.style.opacity = "1";
+            setTimeout(() => { flash.style.opacity = "0"; }, 150);
+        }
+
+        // --- File/Camera Preview ---
+        function previewFile(input) {
+            const file = input.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    preview.src = e.target.result;
+                    preview.style.display = 'block';
+                };
+                reader.readAsDataURL(file);
+            }
+        }
+    </script>
+</body>
+</html>
+
