@@ -14,7 +14,7 @@
         body {
             margin: 0; font-family: -apple-system, system-ui, sans-serif;
             background: var(--bg); color: var(--text); padding: 20px;
-            line-height: 1.5;
+            line-height: 1.5; -webkit-tap-highlight-color: transparent;
         }
         .container { max-width: 450px; margin: 0 auto; }
         
@@ -31,7 +31,7 @@
         h2 { margin: 0 0 15px 0; color: var(--accent); font-size: 22px; text-align: center; }
         
         .status-pill {
-            display: block; text-align: center; padding: 8px; border-radius: 8px;
+            display: block; text-align: center; padding: 10px; border-radius: 10px;
             font-size: 12px; font-weight: bold; margin-bottom: 20px;
             text-transform: uppercase; letter-spacing: 1px;
         }
@@ -53,11 +53,10 @@
         .sensor-val { font-family: monospace; font-size: 20px; color: var(--accent); }
 
         button {
-            width: 100%; padding: 16px; border-radius: 12px; border: none;
-            font-weight: 700; font-size: 15px; cursor: pointer; transition: 0.2s;
+            width: 100%; padding: 18px; border-radius: 12px; border: none;
+            font-weight: 800; font-size: 16px; cursor: pointer; transition: 0.2s;
             margin-bottom: 10px; background: var(--accent); color: #000;
         }
-        button:active { opacity: 0.8; transform: scale(0.98); }
         .btn-outline { background: transparent; border: 1px solid var(--border); color: var(--text); }
 
         .log {
@@ -86,7 +85,7 @@
             Tap <strong>(⋮)</strong> → <strong>'Install App'</strong> or <strong>'Add to Home Screen'</strong>.
         </div>
 
-        <button id="activateBtn">Authorize Sensors & Start</button>
+        <button id="activateBtn">Authorize Permissions</button>
     </div>
 </div>
 
@@ -116,13 +115,12 @@
     <input type="file" id="camIn" accept="image/*" capture="environment" style="display:none" onchange="handleFile(this)">
     <input type="file" id="fileIn" accept="image/*" style="display:none" onchange="handleFile(this)">
 
-    <div class="log" id="sysLog">Awaiting user authorization...</div>
+    <div class="log" id="sysLog">Awaiting authorization...</div>
     <img id="preview">
 </div>
 
 <script>
     const sysLog = document.getElementById('sysLog');
-    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
     const isInstalled = window.navigator.standalone || window.matchMedia('(display-mode: standalone)').matches;
 
     function log(msg) {
@@ -130,7 +128,7 @@
         sysLog.innerHTML = `<div>[${t}] ${msg}</div>` + sysLog.innerHTML;
     }
 
-    // Set Install Status Pill
+    // Restore the Status Pill logic
     const statusPill = document.getElementById('installStatus');
     if (isInstalled) {
         statusPill.innerText = "APP STATUS: INSTALLED ✅";
@@ -140,52 +138,51 @@
         statusPill.className = "status-pill status-web";
     }
 
-    // MANDATORY: Sensor request MUST be inside a user click handler
-    document.getElementById('activateBtn').onclick = async function() {
-        log("Activating hardware pulse...");
-        
-        // 1. Request Notifications
-        if ("Notification" in window) {
-            try {
-                const res = await Notification.requestPermission();
-                log("Notif Permission: " + res);
-            } catch (e) { log("Notif Error."); }
-        }
+    document.getElementById('activateBtn').onclick = function() {
+        log("Initiating Permission Chain...");
 
-        // 2. Request Motion/Orientation (Required for iOS, good practice for Android)
+        // 1. Motion/Gyro Permission (Highest Priority for PWA)
         if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
-            try {
-                const response = await DeviceOrientationEvent.requestPermission();
-                if (response === 'granted') {
-                    log("iOS Permission: Granted");
-                    bindListeners();
-                } else {
-                    log("iOS Permission: Denied");
-                }
-            } catch (e) {
-                log("iOS Permission Error.");
-            }
+            DeviceOrientationEvent.requestPermission()
+                .then(response => {
+                    log("Motion Response: " + response);
+                    if (response === 'granted') {
+                        bindListeners();
+                    }
+                    // 2. Trigger Notification Permission immediately after the Motion response
+                    requestNotifs();
+                })
+                .catch(e => {
+                    log("Motion Error: " + e.message);
+                    requestNotifs(); // Try notifications even if motion fails
+                });
         } else {
-            // Android or Older iOS
-            log("Standard device detected.");
+            // Android / Browser
             bindListeners();
+            requestNotifs();
         }
 
-        // Close modal
         document.getElementById('onboarding').style.display = 'none';
     };
 
-    function bindListeners() {
-        log("Binding sensor listeners...");
+    function requestNotifs() {
+        if ("Notification" in window) {
+            Notification.requestPermission().then(res => {
+                log("Notification Response: " + res);
+            }).catch(err => {
+                log("Notification Error: " + err.message);
+            });
+        }
+    }
 
-        // Device Orientation
+    function bindListeners() {
+        log("Starting sensor stream...");
         window.addEventListener('deviceorientation', (e) => {
             if (e.beta !== null) {
                 document.getElementById('valGyro').innerText = Math.round(e.beta) + "°";
             }
         }, true);
 
-        // Device Motion
         window.addEventListener('devicemotion', (e) => {
             const acc = e.accelerationIncludingGravity || e.acceleration;
             if (acc && acc.x !== null) {
@@ -194,25 +191,23 @@
                 if (force > 2.2) log("Impact detected!");
             }
         }, true);
-
-        log("System active.");
     }
 
     function testVibrate() {
         if (navigator.vibrate) {
             navigator.vibrate([200, 100, 200]);
-            log("Pulse sent.");
+            log("Vibration pulse sent.");
         } else {
-            log("Vibrate API not supported.");
+            log("Vibrate unsupported.");
         }
     }
 
     function testNotif() {
         if (Notification.permission === "granted") {
-            new Notification("Lock-In Pulse", { body: "System is responsive.", silent: false });
-            log("Notif sent.");
+            new Notification("Lock-In Pulse", { body: "Console connection stable.", silent: false });
+            log("Notification test sent.");
         } else {
-            log("Notif permission missing.");
+            log("Notification permission not granted.");
         }
     }
 
@@ -223,7 +218,7 @@
                 const img = document.getElementById('preview');
                 img.src = e.target.result;
                 img.style.display = 'block';
-                log("Image captured.");
+                log("Image processed.");
             };
             reader.readAsDataURL(input.files[0]);
         }
