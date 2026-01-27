@@ -18,7 +18,6 @@
         }
         .container { max-width: 450px; margin: 0 auto; }
         
-        /* Modal Overlay */
         #onboarding {
             position: fixed; inset: 0; background: var(--bg); z-index: 100;
             display: flex; align-items: center; justify-content: center; padding: 20px;
@@ -27,7 +26,6 @@
             background: var(--card); border-radius: 20px; padding: 24px;
             width: 100%; border: 1px solid var(--border);
             box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
-            max-height: 95vh; overflow-y: auto;
         }
         
         h2 { margin: 0 0 15px 0; color: var(--accent); font-size: 22px; text-align: center; }
@@ -37,8 +35,8 @@
             font-size: 12px; font-weight: bold; margin-bottom: 20px;
             text-transform: uppercase; letter-spacing: 1px;
         }
-        .status-installed { background: rgba(34, 197, 94, 0.2); color: var(--accent); border: 1px solid var(--accent); }
-        .status-web { background: rgba(100, 116, 139, 0.2); color: var(--muted); border: 1px solid var(--border); }
+        .status-installed { background: rgba(34, 197, 94, 0.1); color: var(--accent); border: 1px solid var(--accent); }
+        .status-web { background: rgba(100, 116, 139, 0.1); color: var(--muted); border: 1px solid var(--border); }
 
         .guide-section {
             background: rgba(0,0,0,0.3); padding: 15px; border-radius: 12px;
@@ -80,21 +78,21 @@
         
         <div class="guide-section">
             <span class="guide-title">For iOS Users</span>
-            Tap <strong>Share</strong> icon → scroll down and tap <strong>'Edit Actions...'</strong> or <strong>'More'</strong> if needed → select <strong>'Add to Home Screen'</strong>.
+            Tap <strong>Share</strong> → <strong>'More'</strong> if needed → <strong>'Add to Home Screen'</strong>.
         </div>
 
         <div class="guide-section">
             <span class="guide-title">For Android Users</span>
-            Tap the <strong>three dots (⋮)</strong> in Chrome → select <strong>'Install App'</strong> or <strong>'Add to Home Screen'</strong>.
+            Tap <strong>(⋮)</strong> → <strong>'Install App'</strong> or <strong>'Add to Home Screen'</strong>.
         </div>
 
-        <button id="activateBtn">Authorize & Start Auditor</button>
+        <button id="activateBtn">Authorize Sensors & Start</button>
     </div>
 </div>
 
 <div class="container">
     <h1 style="font-size: 24px; margin: 0 0 5px 0;">Hardware Auditor</h1>
-    <p style="color: var(--muted); font-size: 13px; margin-bottom: 20px;">Live Hardware Verification</p>
+    <p style="color: var(--muted); font-size: 13px; margin-bottom: 20px;">Live Verification</p>
 
     <div class="sensor-grid">
         <div class="sensor-box">
@@ -118,7 +116,7 @@
     <input type="file" id="camIn" accept="image/*" capture="environment" style="display:none" onchange="handleFile(this)">
     <input type="file" id="fileIn" accept="image/*" style="display:none" onchange="handleFile(this)">
 
-    <div class="log" id="sysLog">Ready for initialization...</div>
+    <div class="log" id="sysLog">Awaiting user authorization...</div>
     <img id="preview">
 </div>
 
@@ -142,71 +140,79 @@
         statusPill.className = "status-pill status-web";
     }
 
+    // MANDATORY: Sensor request MUST be inside a user click handler
     document.getElementById('activateBtn').onclick = async function() {
-        log("Requesting permissions...");
+        log("Activating hardware pulse...");
         
+        // 1. Request Notifications
         if ("Notification" in window) {
-            try { await Notification.requestPermission(); } catch (e) {}
+            try {
+                const res = await Notification.requestPermission();
+                log("Notif Permission: " + res);
+            } catch (e) { log("Notif Error."); }
         }
 
-        // iOS Sensor Permission
+        // 2. Request Motion/Orientation (Required for iOS, good practice for Android)
         if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
             try {
-                const permission = await DeviceOrientationEvent.requestPermission();
-                if (permission === 'granted') {
-                    initSensors();
+                const response = await DeviceOrientationEvent.requestPermission();
+                if (response === 'granted') {
+                    log("iOS Permission: Granted");
+                    bindListeners();
                 } else {
-                    log("iOS Sensor Denied.");
+                    log("iOS Permission: Denied");
                 }
-            } catch (e) { log("iOS Request Error."); }
+            } catch (e) {
+                log("iOS Permission Error.");
+            }
         } else {
-            // Android / Standard
-            initSensors();
+            // Android or Older iOS
+            log("Standard device detected.");
+            bindListeners();
         }
 
+        // Close modal
         document.getElementById('onboarding').style.display = 'none';
     };
 
-    function initSensors() {
-        log("Engaging sensor suite...");
+    function bindListeners() {
+        log("Binding sensor listeners...");
 
-        // TILT (GYRO)
+        // Device Orientation
         window.addEventListener('deviceorientation', (e) => {
-            // Beta is tilt forward/backward. Check !== null to allow 0.
             if (e.beta !== null) {
                 document.getElementById('valGyro').innerText = Math.round(e.beta) + "°";
             }
         }, true);
 
-        // FORCE (ACCEL)
+        // Device Motion
         window.addEventListener('devicemotion', (e) => {
-            // Use fallback sequence for cross-android compatibility
             const acc = e.accelerationIncludingGravity || e.acceleration;
             if (acc && acc.x !== null) {
                 const force = Math.sqrt(acc.x**2 + acc.y**2 + acc.z**2) / 9.80665;
                 document.getElementById('valAccel').innerText = force.toFixed(1) + "G";
-                if (force > 2.2) log("Impact Spike Detected");
+                if (force > 2.2) log("Impact detected!");
             }
         }, true);
 
-        log("Listeners engaged.");
+        log("System active.");
     }
 
     function testVibrate() {
         if (navigator.vibrate) {
             navigator.vibrate([200, 100, 200]);
-            log("Vibration sent.");
+            log("Pulse sent.");
         } else {
-            log("Vibration unsupported on this browser.");
+            log("Vibrate API not supported.");
         }
     }
 
     function testNotif() {
         if (Notification.permission === "granted") {
-            new Notification("Lock-In Pulse", { body: "Audit signal active.", silent: false });
-            log("Notification triggered.");
+            new Notification("Lock-In Pulse", { body: "System is responsive.", silent: false });
+            log("Notif sent.");
         } else {
-            log("Grant notification permission.");
+            log("Notif permission missing.");
         }
     }
 
@@ -217,7 +223,7 @@
                 const img = document.getElementById('preview');
                 img.src = e.target.result;
                 img.style.display = 'block';
-                log("File rendered.");
+                log("Image captured.");
             };
             reader.readAsDataURL(input.files[0]);
         }
@@ -226,5 +232,4 @@
 
 </body>
 </html>
-
 
