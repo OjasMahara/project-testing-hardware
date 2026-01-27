@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <title>Lock-In Hardware Lab</title>
+    <title>Lock-In Hardware Lab v2</title>
     <style>
         body {
             font-family: -apple-system, system-ui, sans-serif;
@@ -21,57 +21,63 @@
             min-height: 40px; overflow-wrap: break-word;
         }
         button {
-            width: 100%; padding: 14px; border-radius: 10px; border: none;
+            width: 100%; padding: 16px; border-radius: 10px; border: none;
             background: #22c55e; color: #000; font-weight: 800; cursor: pointer;
-            font-size: 15px; transition: transform 0.1s;
+            font-size: 16px; transition: transform 0.1s, background 0.2s;
+            margin-bottom: 10px;
         }
-        button:active { transform: scale(0.96); }
-        .secondary-btn { background: #3b82f6; color: white; margin-top: 10px; }
+        button:active { transform: scale(0.96); background: #4ade80; }
+        .secondary-btn { background: #3b82f6; color: white; }
         .upload-area {
             border: 2px dashed #334155; border-radius: 12px; padding: 20px;
             text-align: center; color: #94a3b8; cursor: pointer;
         }
         #preview { width: 100%; border-radius: 12px; margin-top: 15px; display: none; border: 2px solid #22c55e; }
-        .log { font-size: 11px; color: #64748b; max-height: 80px; overflow-y: auto; margin-top: 10px; }
+        .log { font-size: 11px; color: #64748b; max-height: 120px; overflow-y: auto; margin-top: 10px; background: rgba(0,0,0,0.3); padding: 8px; border-radius: 4px; }
         .flash { position: fixed; inset: 0; background: white; opacity: 0; pointer-events: none; z-index: 9999; }
+        .status-tag { font-size: 10px; padding: 2px 6px; border-radius: 4px; background: #334155; margin-left: auto; }
     </style>
 </head>
 <body>
 
     <div id="flash" class="flash" style="transition: opacity 0.1s;"></div>
 
-    <h1 style="font-size: 24px; margin-bottom: 5px;">Lock-In Lab</h1>
-    <p style="color: #94a3b8; font-size: 13px; margin-bottom: 25px;">Testing real-world hardware integration via GitHub/HTTPS.</p>
+    <h1 style="font-size: 24px; margin-bottom: 5px;">Lock-In Lab v2</h1>
+    <p style="color: #94a3b8; font-size: 13px; margin-bottom: 25px;">HTTPS Environment Detected.</p>
 
-    <!-- 1. GYROSCOPE -->
+    <!-- 1. VIBRATION / HAPTIC PULSE -->
     <div class="card">
-        <h2>🔄 Gyroscope (Pick-up Detection)</h2>
-        <div class="data-box" id="gyroData">Status: Click button to request access</div>
-        <button onclick="initGyro()">Grant Motion Access</button>
+        <div style="display:flex; align-items:center;">
+            <h2>📳 Haptic Pulse</h2>
+            <div id="vibStatus" class="status-tag">Ready</div>
+        </div>
+        <div class="data-box" id="vibInfo">Vibration API: Checking...</div>
+        <button id="vibBtn" style="background: #a855f7; color: white;">Trigger Pulse (Pattern)</button>
+        <p style="font-size: 11px; color: #94a3b8; margin-top: 8px;">
+            <b>Android:</b> Ensure 'Vibration' is on in settings.<br>
+            <b>iOS:</b> Physical 'Silent' switch MUST be OFF. Safari only supports vibration in specific contexts.
+        </p>
+    </div>
+
+    <!-- 2. GYROSCOPE -->
+    <div class="card">
+        <h2>🔄 Motion Auditor</h2>
+        <div class="data-box" id="gyroData">Status: Waiting for permission</div>
+        <button onclick="initGyro()">Enable Sensor Feed</button>
         <div class="log" id="gyroLog"></div>
     </div>
 
-    <!-- 2. HAPTIC PULSE -->
+    <!-- 3. CAMERA / FILE PROOF -->
     <div class="card">
-        <h2>📳 Haptic Pulse (Vibration)</h2>
-        <div class="data-box">Test visual flash and physical vibration.</div>
-        <button style="background: #a855f7; color: white;" onclick="triggerPulse()">Trigger Pulse</button>
-    </div>
-
-    <!-- 3. CAMERA PROOF -->
-    <div class="card">
-        <h2>📸 Proof of Work (Camera)</h2>
-        <div class="data-box">Native camera app capture (Bypass method).</div>
-        <button class="secondary-btn" onclick="document.getElementById('camIn').click()">Open Camera App</button>
+        <h2>📸 Proof of Work</h2>
+        <div class="data-box">Captures stay in local memory only.</div>
+        <button class="secondary-btn" onclick="document.getElementById('camIn').click()">Open Camera</button>
         <input type="file" id="camIn" accept="image/*" capture="environment" style="display:none" onchange="previewFile(this)">
-    </div>
-
-    <!-- 4. FILE/SCREENSHOT UPLOAD -->
-    <div class="card">
-        <h2>📁 File / Screenshot Upload</h2>
-        <div class="data-box">Choose from gallery or upload a screenshot.</div>
-        <div class="upload-area" onclick="document.getElementById('fileIn').click()">
-            Tap to Browse Files
+        
+        <div style="margin: 15px 0; border-top: 1px solid #334155; padding-top: 15px;">
+            <div class="upload-area" onclick="document.getElementById('fileIn').click()">
+                Tap to Upload Screenshot
+            </div>
         </div>
         <input type="file" id="fileIn" accept="image/*" style="display:none" onchange="previewFile(this)">
         <img id="preview">
@@ -82,6 +88,37 @@
         const gyroLog = document.getElementById('gyroLog');
         const flash = document.getElementById('flash');
         const preview = document.getElementById('preview');
+        const vibInfo = document.getElementById('vibInfo');
+        const vibStatus = document.getElementById('vibStatus');
+
+        // --- Vibration Logic ---
+        if (!navigator.vibrate) {
+            vibInfo.innerText = "Vibration API: NOT SUPPORTED";
+            vibStatus.innerText = "Error";
+            vibStatus.style.background = "#ef4444";
+        } else {
+            vibInfo.innerText = "Vibration API: Supported ✅";
+        }
+
+        document.getElementById('vibBtn').onclick = function() {
+            // Visual feedback always
+            flash.style.opacity = "1";
+            setTimeout(() => { flash.style.opacity = "0"; }, 150);
+
+            if (navigator.vibrate) {
+                // Try a double-pulse pattern for better detection
+                const success = navigator.vibrate([200, 100, 200]);
+                if (success) {
+                    vibStatus.innerText = "Success";
+                    vibStatus.style.background = "#22c55e";
+                    logEvent("Vibration triggered successfully");
+                } else {
+                    vibStatus.innerText = "Blocked";
+                    vibStatus.style.background = "#f59e0b";
+                    logEvent("Vibration call failed (User Gesture required)");
+                }
+            }
+        };
 
         // --- Gyroscope Logic ---
         async function initGyro() {
@@ -104,14 +141,15 @@
         function startListening() {
             window.addEventListener('deviceorientation', (e) => {
                 if (e.beta !== null) {
-                    gyroData.innerText = `Tilt (Beta): ${Math.round(e.beta)}°\nRoll (Gamma): ${Math.round(e.gamma)}°`;
+                    gyroData.innerHTML = `B (Tilt): ${Math.round(e.beta)}°<br>G (Roll): ${Math.round(e.gamma)}°`;
                     
-                    // Simple pick-up threshold
-                    if (Math.abs(e.beta) > 25 || Math.abs(e.gamma) > 20) {
-                        logEvent("Movement Detected");
+                    // Pick-up detection: beta (tilt towards face) increases
+                    if (Math.abs(e.beta) > 30 || Math.abs(e.gamma) > 25) {
+                        logEvent("Motion Spike Detected");
                     }
                 }
             });
+            logEvent("Gyroscope Active");
         }
 
         function logEvent(msg) {
@@ -119,25 +157,16 @@
             gyroLog.innerHTML = `<div>[${time}] ${msg}</div>` + gyroLog.innerHTML;
         }
 
-        // --- Pulse Logic ---
-        function triggerPulse() {
-            // Vibrate
-            if (navigator.vibrate) {
-                navigator.vibrate(200);
-            }
-            // Flash
-            flash.style.opacity = "1";
-            setTimeout(() => { flash.style.opacity = "0"; }, 150);
-        }
-
         // --- File/Camera Preview ---
         function previewFile(input) {
             const file = input.files[0];
             if (file) {
+                logEvent("File received: " + file.name);
                 const reader = new FileReader();
                 reader.onload = function(e) {
                     preview.src = e.target.result;
                     preview.style.display = 'block';
+                    logEvent("Preview rendered");
                 };
                 reader.readAsDataURL(file);
             }
