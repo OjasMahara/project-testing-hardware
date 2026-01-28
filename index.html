@@ -5,6 +5,31 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="LockIn">
+    
+    <script>
+        const manifest = {
+            "name": "Lock-In Auditor",
+            "short_name": "LockIn",
+            "start_url": ".",
+            "display": "standalone",
+            "background_color": "#020617",
+            "theme_color": "#020617",
+            "icons": [{
+                "src": "https://cdn-icons-png.flaticon.com/512/1162/1162456.png",
+                "sizes": "512x512",
+                "type": "image/png"
+            }]
+        };
+        const stringManifest = JSON.stringify(manifest);
+        const blob = new Blob([stringManifest], {type: 'application/json'});
+        const manifestURL = URL.createObjectURL(blob);
+        const link = document.createElement('link');
+        link.rel = 'manifest';
+        link.href = manifestURL;
+        document.head.appendChild(link);
+    </script>
+
     <title>Lock-In Auditor</title>
     <style>
         :root {
@@ -16,7 +41,7 @@
             background: var(--bg); color: var(--text); padding: 20px;
             line-height: 1.5; -webkit-tap-highlight-color: transparent;
         }
-        .container { max-width: 450px; margin: 0 auto; }
+        .container { max-width: 450px; margin: 0 auto; display: none; }
         
         #onboarding {
             position: fixed; inset: 0; background: var(--bg); z-index: 100;
@@ -24,25 +49,20 @@
         }
         .modal {
             background: var(--card); border-radius: 20px; padding: 24px;
-            width: 100%; border: 1px solid var(--border);
-            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            width: 100%; border: 1px solid var(--border); text-align: center;
         }
         
-        h2 { margin: 0 0 15px 0; color: var(--accent); font-size: 22px; text-align: center; }
-        
-        .status-pill {
-            display: block; text-align: center; padding: 10px; border-radius: 10px;
-            font-size: 12px; font-weight: bold; margin-bottom: 20px;
-            text-transform: uppercase; letter-spacing: 1px;
+        .platform-badge {
+            display: inline-block; padding: 4px 12px; border-radius: 20px;
+            background: rgba(34, 197, 94, 0.1); border: 1px solid var(--accent);
+            color: var(--accent); font-size: 10px; font-weight: 800;
+            text-transform: uppercase; margin-bottom: 12px; letter-spacing: 1px;
         }
-        .status-installed { background: rgba(34, 197, 94, 0.1); color: var(--accent); border: 1px solid var(--accent); }
-        .status-web { background: rgba(100, 116, 139, 0.1); color: var(--muted); border: 1px solid var(--border); }
 
-        .guide-section {
-            background: rgba(0,0,0,0.3); padding: 15px; border-radius: 12px;
-            border-left: 4px solid var(--accent); margin-bottom: 15px; font-size: 13px;
+        .guide-box {
+            background: rgba(255,255,255,0.05); padding: 20px; border-radius: 15px;
+            margin: 20px 0; border: 1px dashed var(--border);
         }
-        .guide-title { font-weight: 800; display: block; margin-bottom: 5px; color: var(--accent); font-size: 11px; text-transform: uppercase; }
 
         .sensor-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px; }
         .sensor-box {
@@ -55,47 +75,63 @@
         button {
             width: 100%; padding: 18px; border-radius: 12px; border: none;
             font-weight: 800; font-size: 16px; cursor: pointer; transition: 0.2s;
-            margin-bottom: 10px; background: var(--accent); color: #000;
+            background: var(--accent); color: #000;
         }
-        .btn-outline { background: transparent; border: 1px solid var(--border); color: var(--text); }
+        .btn-report { background: #3b82f6; color: white; margin-top: 10px; }
+        
+        /* Specific styles for the Canvas Preview button */
+        .btn-preview { 
+            background: transparent; 
+            border: 1px solid var(--muted); 
+            color: var(--muted); 
+            margin-top: 15px;
+            font-size: 12px;
+            padding: 10px;
+        }
 
-        .log {
-            background: #000; padding: 12px; border-radius: 12px;
-            font-size: 11px; color: var(--accent); font-family: monospace;
-            height: 120px; overflow-y: auto; border: 1px solid var(--border);
+        #reportModal {
+            display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.9);
+            z-index: 200; padding: 20px; align-items: center; justify-content: center;
         }
-        #preview { width: 100%; border-radius: 12px; margin-top: 15px; display: none; border: 1px solid var(--border); }
+        .report-content {
+            background: var(--card); border-radius: 20px; padding: 24px;
+            width: 100%; max-width: 400px; border: 1px solid var(--border);
+        }
+        .report-line { display: flex; justify-content: space-between; margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px solid var(--border); }
+        .tag-yes { color: var(--accent); font-weight: bold; }
+        .tag-no { color: var(--muted); }
     </style>
 </head>
 <body>
 
 <div id="onboarding">
     <div class="modal">
-        <h2>App Setup</h2>
+        <div id="platformStatus" class="platform-badge">Detecting...</div>
+        <h2 style="color:#fff; margin-top: 5px;">Integrity Check</h2>
+        <p style="font-size: 14px; color: var(--muted)">Hardware sensors are restricted in browsers.<br>Run LockIn from your home screen to audit.</p>
         
-        <div id="installStatus" class="status-pill">Checking Status...</div>
+        <div class="guide-box" id="platformInstructions">
+            Checking compatibility...
+        </div>
         
-        <div class="guide-section">
-            <span class="guide-title">For iOS Users</span>
-            Tap <strong>Share</strong> → <strong>'More'</strong> if needed → <strong>'Add to Home Screen'</strong>.
-        </div>
-
-        <div class="guide-section">
-            <span class="guide-title">For Android Users</span>
-            Tap <strong>(⋮)</strong> → <strong>'Install App'</strong> or <strong>'Add to Home Screen'</strong>.
-        </div>
-
-        <button id="activateBtn">Authorize Permissions</button>
+        <p style="font-size: 11px; color: var(--muted)">The app will unlock automatically once opened from your home screen.</p>
+        
+        <!-- Temporary Preview Button for Canvas -->
+        <button id="previewBtn" class="btn-preview" onclick="forceEnter()">[Canvas Preview] Skip Install Check</button>
+        
+        <button id="continueBtn" style="display:none; margin-top:15px;" onclick="enterApp()">Continue to Auditor</button>
     </div>
 </div>
 
-<div class="container">
-    <h1 style="font-size: 24px; margin: 0 0 5px 0;">Hardware Auditor</h1>
-    <p style="color: var(--muted); font-size: 13px; margin-bottom: 20px;">Live Verification</p>
+<div class="container" id="mainApp">
+    <header style="margin-bottom: 25px;">
+        <h1 style="font-size: 24px; margin: 0 0 5px 0;">Hardware Auditor</h1>
+        <p style="color: var(--muted); font-size: 13px;">Motion & Haptic Integrity Check</p>
+    </header>
 
     <div class="sensor-grid">
         <div class="sensor-box">
-            <div class="sensor-label">Gyro (Tilt)</div>
+            <div class="sensor-label">Gyroscope (Tilt)</div>
             <div id="valGyro" class="sensor-val">--</div>
         </div>
         <div class="sensor-box">
@@ -104,127 +140,135 @@
         </div>
     </div>
 
-    <button onclick="testVibrate()">Test Vibrate Pulse</button>
-    <button onclick="testNotif()">Test Notification Pulse</button>
+    <button id="vibrateBtn" onclick="testVibrate()">Test Vibration Pulse</button>
+    <button class="btn-report" onclick="showReport()">Show Capability Report</button>
     
-    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
-        <button class="btn-outline" onclick="document.getElementById('camIn').click()">Open Camera</button>
-        <button class="btn-outline" onclick="document.getElementById('fileIn').click()">Upload File</button>
+    <button style="margin-top:30px; background:#334155; color:#94a3b8; font-size:12px;" onclick="location.reload()">Reset to Onboarding</button>
+</div>
+
+<div id="reportModal">
+    <div class="report-content">
+        <h2 style="margin-bottom: 20px;">Device Capabilities</h2>
+        <div id="reportData"></div>
+        <button style="margin-top: 20px;" onclick="document.getElementById('reportModal').style.display='none'">Dismiss</button>
     </div>
-
-    <input type="file" id="camIn" accept="image/*" capture="environment" style="display:none" onchange="handleFile(this)">
-    <input type="file" id="fileIn" accept="image/*" style="display:none" onchange="handleFile(this)">
-
-    <div class="log" id="sysLog">Awaiting authorization...</div>
-    <img id="preview">
 </div>
 
 <script>
-    const sysLog = document.getElementById('sysLog');
-    const isInstalled = window.navigator.standalone || window.matchMedia('(display-mode: standalone)').matches;
-
-    function log(msg) {
-        const t = new Date().toLocaleTimeString([], {hour12:false});
-        sysLog.innerHTML = `<div>[${t}] ${msg}</div>` + sysLog.innerHTML;
-    }
-
-    // Restore the Status Pill logic
-    const statusPill = document.getElementById('installStatus');
-    if (isInstalled) {
-        statusPill.innerText = "APP STATUS: INSTALLED ✅";
-        statusPill.className = "status-pill status-installed";
-    } else {
-        statusPill.innerText = "APP STATUS: WEB BROWSER ⚠️";
-        statusPill.className = "status-pill status-web";
-    }
-
-    document.getElementById('activateBtn').onclick = function() {
-        log("Initiating Permission Chain...");
-
-        // 1. Motion/Gyro Permission (Highest Priority for PWA)
-        if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
-            DeviceOrientationEvent.requestPermission()
-                .then(response => {
-                    log("Motion Response: " + response);
-                    if (response === 'granted') {
-                        bindListeners();
-                    }
-                    // 2. Trigger Notification Permission immediately after the Motion response
-                    requestNotifs();
-                })
-                .catch(e => {
-                    log("Motion Error: " + e.message);
-                    requestNotifs(); // Try notifications even if motion fails
-                });
-        } else {
-            // Android / Browser
-            bindListeners();
-            requestNotifs();
-        }
-
-        document.getElementById('onboarding').style.display = 'none';
+    const isStandalone = window.navigator.standalone || window.matchMedia('(display-mode: standalone)').matches;
+    
+    let caps = {
+        vibrate: false,
+        gyro: false,
+        accel: false
     };
 
-    function requestNotifs() {
-        if ("Notification" in window) {
-            Notification.requestPermission().then(res => {
-                log("Notification Response: " + res);
-            }).catch(err => {
-                log("Notification Error: " + err.message);
-            });
+    function updateOnboarding() {
+        const badge = document.getElementById('platformStatus');
+        const guide = document.getElementById('platformInstructions');
+        const continueBtn = document.getElementById('continueBtn');
+        const ua = navigator.userAgent.toLowerCase();
+        
+        let platform = "Desktop/Unknown";
+        let instruction = "Browser Menu → <strong>Install App</strong>";
+
+        if (/iphone|ipad|ipod/.test(ua)) {
+            platform = "iOS / iPadOS";
+            instruction = `Tap <span style="color:#3b82f6">Share</span> then<br><strong>"Add to Home Screen"</strong>`;
+        } else if (/android/.test(ua)) {
+            platform = "Android Device";
+            instruction = `Tap <span style="color:var(--accent)">Menu (⋮)</span> then<br><strong>"Install App"</strong>`;
+        } else if (/macintosh/.test(ua)) {
+            platform = "macOS";
+        }
+
+        badge.innerText = `${platform} • ${isStandalone ? 'INSTALLED' : 'BROWSER'}`;
+        guide.innerHTML = instruction;
+
+        if (isStandalone) {
+            continueBtn.style.display = 'block';
+            document.getElementById('previewBtn').style.display = 'none';
+            guide.innerHTML = `<span style="color:var(--accent)">✔ System Verified</span><br>App is running in standalone mode.`;
+        }
+    }
+
+    // Temporary force entry for testing in Canvas
+    function forceEnter() {
+        document.getElementById('onboarding').style.display = 'none';
+        document.getElementById('mainApp').style.display = 'block';
+        initHardware();
+    }
+
+    function enterApp() {
+        if (isStandalone) {
+            forceEnter();
+        }
+    }
+
+    // Auto-enter if already installed
+    if (isStandalone) {
+        enterApp();
+    } else {
+        updateOnboarding();
+    }
+
+    function initHardware() {
+        if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+            DeviceOrientationEvent.requestPermission().then(res => { 
+                if (res === 'granted') bindListeners(); 
+            }).catch(err => console.log("Permission rejected or needs user gesture"));
+        } else {
+            bindListeners();
         }
     }
 
     function bindListeners() {
-        log("Starting sensor stream...");
         window.addEventListener('deviceorientation', (e) => {
             if (e.beta !== null) {
                 document.getElementById('valGyro').innerText = Math.round(e.beta) + "°";
+                caps.gyro = true;
             }
         }, true);
-
+        
         window.addEventListener('devicemotion', (e) => {
             const acc = e.accelerationIncludingGravity || e.acceleration;
             if (acc && acc.x !== null) {
                 const force = Math.sqrt(acc.x**2 + acc.y**2 + acc.z**2) / 9.80665;
                 document.getElementById('valAccel').innerText = force.toFixed(1) + "G";
-                if (force > 2.2) log("Impact detected!");
+                caps.accel = true;
             }
         }, true);
     }
 
     function testVibrate() {
-        if (navigator.vibrate) {
-            navigator.vibrate([200, 100, 200]);
-            log("Vibration pulse sent.");
+        if (navigator.vibrate) { 
+            const success = navigator.vibrate([200, 100, 200]);
+            if (success) {
+                caps.vibrate = true;
+                const btn = document.getElementById('vibrateBtn');
+                btn.innerText = "Pulse Sent ✓";
+                btn.style.background = "#166534";
+                btn.style.color = "white";
+            }
         } else {
-            log("Vibrate unsupported.");
+            // Visual feedback if vibration isn't supported in browser
+            const btn = document.getElementById('vibrateBtn');
+            btn.innerText = "Haptics Blocked by Browser";
+            btn.style.background = "#991b1b";
+            btn.style.color = "white";
         }
     }
 
-    function testNotif() {
-        if (Notification.permission === "granted") {
-            new Notification("Lock-In Pulse", { body: "Console connection stable.", silent: false });
-            log("Notification test sent.");
-        } else {
-            log("Notification permission not granted.");
-        }
-    }
-
-    function handleFile(input) {
-        if (input.files && input.files[0]) {
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                const img = document.getElementById('preview');
-                img.src = e.target.result;
-                img.style.display = 'block';
-                log("Image processed.");
-            };
-            reader.readAsDataURL(input.files[0]);
-        }
+    function showReport() {
+        const reportBody = document.getElementById('reportData');
+        reportBody.innerHTML = `
+            <div class="report-line"><span>Vibration (Haptic)</span> <span class="${caps.vibrate ? 'tag-yes' : 'tag-no'}">${caps.vibrate ? 'TESTED' : 'NOT TESTED'}</span></div>
+            <div class="report-line"><span>Gyroscope (Tilt)</span> <span class="${caps.gyro ? 'tag-yes' : 'tag-no'}">${caps.gyro ? 'ACTIVE' : 'INACTIVE'}</span></div>
+            <div class="report-line"><span>Accel (Motion)</span> <span class="${caps.accel ? 'tag-yes' : 'tag-no'}">${caps.accel ? 'ACTIVE' : 'INACTIVE'}</span></div>
+        `;
+        document.getElementById('reportModal').style.display = 'flex';
     }
 </script>
 
 </body>
 </html>
-
