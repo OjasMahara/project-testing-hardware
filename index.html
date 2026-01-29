@@ -40,6 +40,7 @@
             margin: 0; font-family: -apple-system, system-ui, sans-serif;
             background: var(--bg); color: var(--text); padding: 20px;
             line-height: 1.5; -webkit-tap-highlight-color: transparent;
+            overflow-x: hidden;
         }
         .container { max-width: 450px; margin: 0 auto; display: none; }
         
@@ -50,6 +51,7 @@
         .modal {
             background: var(--card); border-radius: 20px; padding: 24px;
             width: 100%; border: 1px solid var(--border); text-align: center;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
         }
         
         .platform-badge {
@@ -68,18 +70,20 @@
         .sensor-box {
             background: #000; border-radius: 12px; padding: 15px;
             border: 1px solid var(--border); text-align: center;
+            transition: border-color 0.3s;
         }
+        .sensor-box.active { border-color: var(--accent); }
         .sensor-label { font-size: 10px; color: var(--muted); text-transform: uppercase; margin-bottom: 5px; }
         .sensor-val { font-family: monospace; font-size: 20px; color: var(--accent); }
 
         button {
             width: 100%; padding: 18px; border-radius: 12px; border: none;
-            font-weight: 800; font-size: 16px; cursor: pointer; transition: 0.2s;
+            font-weight: 800; font-size: 16px; cursor: pointer; transition: transform 0.1s, filter 0.2s;
             background: var(--accent); color: #000;
         }
+        button:active { transform: scale(0.98); filter: brightness(1.2); }
         .btn-report { background: #3b82f6; color: white; margin-top: 10px; }
         
-        /* Specific styles for the Canvas Preview button */
         .btn-preview { 
             background: transparent; 
             border: 1px solid var(--muted); 
@@ -92,6 +96,7 @@
         #reportModal {
             display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.9);
             z-index: 200; padding: 20px; align-items: center; justify-content: center;
+            backdrop-filter: blur(5px);
         }
         .report-content {
             background: var(--card); border-radius: 20px; padding: 24px;
@@ -100,6 +105,13 @@
         .report-line { display: flex; justify-content: space-between; margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px solid var(--border); }
         .tag-yes { color: var(--accent); font-weight: bold; }
         .tag-no { color: var(--muted); }
+
+        @keyframes pulse-ring {
+            0% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.4); }
+            70% { box-shadow: 0 0 0 10px rgba(34, 197, 94, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
+        }
+        .live-indicator { animation: pulse-ring 2s infinite; }
     </style>
 </head>
 <body>
@@ -130,11 +142,11 @@
     </header>
 
     <div class="sensor-grid">
-        <div class="sensor-box">
+        <div class="sensor-box" id="boxGyro">
             <div class="sensor-label">Gyroscope (Tilt)</div>
             <div id="valGyro" class="sensor-val">--</div>
         </div>
-        <div class="sensor-box">
+        <div class="sensor-box" id="boxAccel">
             <div class="sensor-label">Accel (Force)</div>
             <div id="valAccel" class="sensor-val">--</div>
         </div>
@@ -189,10 +201,14 @@
             continueBtn.style.display = 'block';
             document.getElementById('previewBtn').style.display = 'none';
             guide.innerHTML = `<span style="color:var(--accent)">✔ System Verified</span><br>App is running in standalone mode.`;
+            
+            // Auto-trigger if permission was already granted in this session
+            if (sessionStorage.getItem('lockin_permission_granted') === 'true') {
+                forceEnter();
+            }
         }
     }
 
-    // Temporary force entry for testing in Canvas
     function forceEnter() {
         document.getElementById('onboarding').style.display = 'none';
         document.getElementById('mainApp').style.display = 'block';
@@ -200,32 +216,40 @@
     }
 
     function enterApp() {
-        if (isStandalone) {
+        if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+            DeviceOrientationEvent.requestPermission()
+                .then(permissionState => {
+                    if (permissionState === 'granted') {
+                        sessionStorage.setItem('lockin_permission_granted', 'true');
+                    }
+                    forceEnter();
+                })
+                .catch(err => {
+                    console.error("Permission error:", err);
+                    forceEnter();
+                });
+        } else {
             forceEnter();
         }
     }
 
-    // Auto-enter if already installed
-    if (isStandalone) {
-        enterApp();
-    } else {
+    if (!isStandalone) {
         updateOnboarding();
+    } else {
+        updateOnboarding(); 
     }
 
     function initHardware() {
-        if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
-            DeviceOrientationEvent.requestPermission().then(res => { 
-                if (res === 'granted') bindListeners(); 
-            }).catch(err => console.log("Permission rejected or needs user gesture"));
-        } else {
-            bindListeners();
-        }
+        bindListeners();
+        // Check for vibration support immediately
+        caps.vibrate = !!navigator.vibrate;
     }
 
     function bindListeners() {
         window.addEventListener('deviceorientation', (e) => {
             if (e.beta !== null) {
                 document.getElementById('valGyro').innerText = Math.round(e.beta) + "°";
+                document.getElementById('boxGyro').classList.add('active');
                 caps.gyro = true;
             }
         }, true);
@@ -235,34 +259,41 @@
             if (acc && acc.x !== null) {
                 const force = Math.sqrt(acc.x**2 + acc.y**2 + acc.z**2) / 9.80665;
                 document.getElementById('valAccel').innerText = force.toFixed(1) + "G";
+                document.getElementById('boxAccel').classList.add('active');
                 caps.accel = true;
             }
         }, true);
+        
+        // Timeout check if no sensors are responding
+        setTimeout(() => {
+            if (!caps.gyro && !caps.accel) {
+                document.getElementById('valGyro').innerText = "N/A";
+                document.getElementById('valAccel').innerText = "N/A";
+            }
+        }, 2000);
     }
 
     function testVibrate() {
+        const btn = document.getElementById('vibrateBtn');
         if (navigator.vibrate) { 
-            const success = navigator.vibrate([200, 100, 200]);
+            const success = navigator.vibrate([100, 50, 100]);
             if (success) {
                 caps.vibrate = true;
-                const btn = document.getElementById('vibrateBtn');
                 btn.innerText = "Pulse Sent ✓";
-                btn.style.background = "#166534";
-                btn.style.color = "white";
+                btn.classList.add('live-indicator');
+                setTimeout(() => btn.classList.remove('live-indicator'), 2000);
             }
         } else {
-            // Visual feedback if vibration isn't supported in browser
-            const btn = document.getElementById('vibrateBtn');
-            btn.innerText = "Haptics Blocked by Browser";
-            btn.style.background = "#991b1b";
-            btn.style.color = "white";
+            btn.innerText = "Haptics Not Supported";
+            btn.style.background = "#334155";
+            btn.style.color = "var(--muted)";
         }
     }
 
     function showReport() {
         const reportBody = document.getElementById('reportData');
         reportBody.innerHTML = `
-            <div class="report-line"><span>Vibration (Haptic)</span> <span class="${caps.vibrate ? 'tag-yes' : 'tag-no'}">${caps.vibrate ? 'TESTED' : 'NOT TESTED'}</span></div>
+            <div class="report-line"><span>Vibration (Haptic)</span> <span class="${caps.vibrate ? 'tag-yes' : 'tag-no'}">${caps.vibrate ? 'READY' : 'UNAVAILABLE'}</span></div>
             <div class="report-line"><span>Gyroscope (Tilt)</span> <span class="${caps.gyro ? 'tag-yes' : 'tag-no'}">${caps.gyro ? 'ACTIVE' : 'INACTIVE'}</span></div>
             <div class="report-line"><span>Accel (Motion)</span> <span class="${caps.accel ? 'tag-yes' : 'tag-no'}">${caps.accel ? 'ACTIVE' : 'INACTIVE'}</span></div>
         `;
